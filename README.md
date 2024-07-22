@@ -1,5 +1,5 @@
 # Car_Racing
 
 
-- [x] [IDM](https://gitlab-master.nvidia.com/dl_focus_group/car_racing/IDM)
+- [x] [IDM](https://github.com/chenmaol/car_racing/tree/main/IDM)
 - [ ] Foundation Model
