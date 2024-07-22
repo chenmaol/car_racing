@@ -14,7 +14,7 @@ class DataRecorder:
         self.video_record_fps = 10
         self.myScreen = MyScreen((0, 0, 1280, 800))
         self.root = '../data'
-        self.target_keys = ['w', 'a', 's', 'd']
+        self.target_keys = ['w', 'a', 's', 'd', 'r']
 
         # create output dataframe
         self.columns_image = ['frame_name', 'record_time', 'seq']
