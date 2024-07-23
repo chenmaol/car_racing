@@ -4,3 +4,4 @@ pandas==1.5.3
 pynput
 pywin32
 tqdm
+pillow
