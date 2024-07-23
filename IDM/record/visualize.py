@@ -25,7 +25,7 @@ def display_image(if_single_frame=False):
         return
 
     # 如果时间差小于期望的帧时间，则等待
-    frame_duration = 1 / fps
+    frame_duration = interval / fps
     while time.time() < last_frame_time + frame_duration:
         pass
 
@@ -70,78 +70,6 @@ def play_pause():
         pass
 
 
-def get_dataset(config):
-    session_path = config["directory"]
-    csv_path = os.path.join(session_path, "label.csv")
-    if not os.path.exists(csv_path):
-        raise FileNotFoundError(f" Couldn't find label.csv in {session_path}")
-
-    label_csv_df = pd.read_csv(csv_path, usecols=['frame_name'] + config['data_columns'])
-    session_name = os.path.basename(session_path)
-    label_csv_df['session_name'] = session_name
-
-    session_meta_path = os.path.join(session_path, "meta.json")
-    if not os.path.exists(session_meta_path):
-        raise FileNotFoundError(f" Couldn't find meta.json in {session_path}")
-
-    session_meta_json = json.load(open(session_meta_path))
-
-    # match frame count between files
-    if not (label_csv_df.shape[0] == session_meta_json["last_record_frame_index"]):
-        raise ValueError(
-            f'frame count mismatch between meta.json {session_meta_json["last_record_frame_index"]} and label_csv {label_csv_df.shape[0]}')
-
-    # sanity checks on images in label df
-    for row in label_csv_df.iterrows():
-        image_name = row[1]["frame_name"]
-        image_path = os.path.join(session_path, "images", image_name)
-
-        # check if image exist in images folder
-        if not os.path.exists(image_path):
-            raise FileNotFoundError(f" Couldn't find file {image_path}")
-
-    # append base path in df itself
-    label_csv_df["image_index"] = label_csv_df["frame_name"].apply(lambda x: int(x.split('.')[0]))
-    label_csv_df["frame_name"] = label_csv_df["frame_name"].apply(
-        lambda x: os.path.join(session_path, 'images', x))
-
-    if (config['val_split'] + config['test_split'] >= 1.0) \
-            or not (0.0 <= config['val_split'] < 1.0) \
-            or not (0.0 <= config['test_split'] < 1.0):
-        raise ValueError(
-            f"Sum of val_split:{config['val_split']} and test_split{config['test_split']} should be less than 1.0, 1-(val_split+test_split) can't be non positive for train_split")
-
-    labels_1 = label_csv_df['w'] - label_csv_df['s']
-    labels_2 = label_csv_df['a'] - label_csv_df['d']
-    labels_tmp_1 = labels_1.copy()
-    labels_tmp_2 = labels_2.copy()
-    for i in range(1, config['seq_length']):
-        labels_tmp_1 += labels_1.shift(-i)
-        labels_tmp_2 += labels_2.shift(-i)
-    labels_tmp_1 /= config['seq_length']
-    labels_tmp_2 /= config['seq_length']
-    labels_tmp_1.fillna(method='ffill', inplace=True)
-    labels_tmp_2.fillna(method='ffill', inplace=True)
-    label_csv_df['labels_1'] = labels_tmp_1
-    label_csv_df['labels_2'] = labels_tmp_2
-
-    seq_csv_df = pd.read_csv(csv_path, usecols=['seq'])
-    # black list
-    black_list = []
-    for i in range(len(seq_csv_df)):
-        seq_id = seq_csv_df.iloc[i].values[0]
-        if (
-                i >= len(seq_csv_df) - config['seq_length'] or
-                i < config['seq_length'] - 1 or
-                seq_csv_df.iloc[i + config['seq_length']].values[0] != seq_id or
-                seq_csv_df.iloc[i - config['seq_length'] + 1].values[0] != seq_id
-        ):
-            black_list.append(i)
-
-    return label_csv_df, black_list
-
-
-
 if __name__ == '__main__':
     fps = 10
     save_path = "../data"
@@ -153,6 +81,7 @@ if __name__ == '__main__':
     df_key = pd.read_csv(os.path.join(save_path, "keys.csv"))
 
     show_nums = 1000
+    interval = 2
 
     # 创建主窗口
     root = Tk()
@@ -168,13 +97,15 @@ if __name__ == '__main__':
     for index, row in tqdm(df_image.iterrows(), total=show_nums):
         if index >= show_nums:
             break
+        if index % interval != 0:
+            continue
         key_pressing_time = {}
         for key in target_keys:
             key_pressing_time[key] = 0.0
         frame_name = row['frame_name'].strip()
         timestamp = row['record_time']
 
-        last_timestamp = timestamp - 0.1 if last_row is None else last_row['record_time']
+        last_timestamp = timestamp - interval / fps if last_row is None else last_row['record_time']
 
         filtered_df = df_key[(df_key['start_time'] < timestamp) & (df_key['end_time'] > last_timestamp)]
 
@@ -204,7 +135,7 @@ if __name__ == '__main__':
     image_label = Label(root, width=canvas_size[0], height=canvas_size[1])
     image_label.pack()
     # 创建滑动条
-    scale = Scale(root, from_=0, to=show_nums - 1, orient=HORIZONTAL, command=on_slide)
+    scale = Scale(root, from_=0, to=(show_nums - 1) // interval, orient=HORIZONTAL, command=on_slide)
     scale.pack()
     # 创建播放/暂停按钮
     play_pause_button = Button(root, text="Play", command=play_pause)
