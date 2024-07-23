@@ -1,16 +1,12 @@
 import cv2
 import pandas as pd
-import tkinter as tk
 from tkinter import Tk, Label, Scale, HORIZONTAL, Frame, Button, Canvas
 
-import torch
 from PIL import Image, ImageTk
 import os
 import json
 import time
 from tqdm import tqdm
-import torchvision.transforms as transforms
-import numpy as np
 
 
 
