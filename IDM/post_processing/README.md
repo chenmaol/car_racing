@@ -1,20 +1,21 @@
 # Car_Racing - IDM - Post Processing
 
 ## 数据结构
---data
-    --chenmao
-        --images
-        --images.csv
-        --keys.csv
-    --quanhao
-        --images
-        --images.csv
-        --keys.csv
-    -- ...
-    --labels_xxx.csv (运行后生成)
---post_processing
-    --process.py
-
+```
+--data  
+    --chenmao  
+        --images  
+        --images.csv  
+        --keys.csv  
+    --quanhao  
+        --images  
+        --images.csv  
+        --keys.csv  
+    -- ...  
+    --labels_xxx.csv (运行后生成)  
+--post_processing  
+    --process.py  
+```
 ## 运行  
 ```
 python process.py
