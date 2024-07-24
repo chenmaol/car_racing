@@ -94,6 +94,7 @@ if __name__ == '__main__':
     target_keys = ['w', 'a', 's', 'd', 'r']
     last_row = None
     # 读取图片和key状态
+    show_nums = min(len(df_image), show_nums)
     for index, row in tqdm(df_image.iterrows(), total=show_nums):
         if index >= show_nums:
             break
