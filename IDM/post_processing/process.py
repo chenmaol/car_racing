@@ -27,8 +27,10 @@ def split_seq(df_image_single_seq, seq_id):
             key = key_row['key_name']
             key_pressing_time[key] = t_ratio
 
-        df_image_single_seq.loc[index, 'feature_1'] = key_pressing_time['w'] - key_pressing_time['s']
-        df_image_single_seq.loc[index, 'feature_2'] = key_pressing_time['a'] - key_pressing_time['d']
+        df_image_single_seq.loc[index, 'w'] = key_pressing_time['w'] > 0.5
+        df_image_single_seq.loc[index, 's'] = key_pressing_time['s'] > 0.5
+        df_image_single_seq.loc[index, 'a'] = key_pressing_time['a'] > 0.5
+        df_image_single_seq.loc[index, 'd'] = key_pressing_time['d'] > 0.5
         df_image_single_seq.loc[index, 'if_dirty'] = key_pressing_time['r'] > 0
 
         if df_image_single_seq.loc[index, 'if_dirty'] is True:
@@ -56,7 +58,7 @@ def extend_path(name):
 
 if __name__ == '__main__':
     # 每隔多少张图像取一张图作为训练数据
-    interval = 3
+    interval = 1
     # 图像录制间隔
     fps = 10
     # 脏数据过滤追溯时间 / 秒
@@ -68,6 +70,8 @@ if __name__ == '__main__':
     seq_count_total = 0
     df_processed_total = []
     for sub_folder in sub_folders:
+        if sub_folder == 'images':
+            continue
         if not os.path.isdir(os.path.join(save_path, sub_folder)):
             continue
         image_save_path = os.path.join(save_path, sub_folder, 'images')

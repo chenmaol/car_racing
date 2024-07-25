@@ -75,7 +75,7 @@ if __name__ == '__main__':
     save_path = "../data"
     image_save_path = os.path.join(save_path, 'images')
 
-    image_size = (512, 512)
+    image_size = (128, 128)
     # 读取CSV文件
     df_image = pd.read_csv(os.path.join(save_path, "images.csv"))
     df_key = pd.read_csv(os.path.join(save_path, "keys.csv"))
