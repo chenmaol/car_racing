@@ -22,6 +22,8 @@ def split_seq(df_image_single_seq, seq_id):
         filtered_df = df_key[(df_key['start_time'] < timestamp) & (df_key['end_time'] > last_timestamp)]
 
         for _, key_row in filtered_df.iterrows():
+            if timestamp == last_timestamp:
+                print(index)
             t_ratio = (min(timestamp, key_row['end_time']) - max(last_timestamp, key_row['start_time'])) / (
                         timestamp - last_timestamp)
             key = key_row['key_name']
@@ -74,6 +76,7 @@ if __name__ == '__main__':
             continue
         if not os.path.isdir(os.path.join(save_path, sub_folder)):
             continue
+        print(sub_folder)
         image_save_path = os.path.join(save_path, sub_folder, 'images')
         # 读取CSV文件
         df_image = pd.read_csv(os.path.join(save_path, sub_folder, "images.csv"))
@@ -82,6 +85,8 @@ if __name__ == '__main__':
         seq_count = df_image['seq'].iloc[-1]
 
         for seq_id in range(seq_count + 1):
+            if len(df_image[df_image['seq'] == seq_id]) == 0:
+                continue
             df_processed, seq_count_total = split_seq(df_image[df_image['seq'] == seq_id].copy(), seq_count_total)
             df_processed_total.append(df_processed)
 
