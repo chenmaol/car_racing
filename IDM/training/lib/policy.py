@@ -267,7 +267,7 @@ class InverseActionNet(MinecraftPolicy):
 
         x = F.relu(x, inplace=False)
 
-        pi_latent = self.lastlayer(x)
+        # pi_latent = self.lastlayer(x)
         pi_latent = self.final_ln(x)
         return (pi_latent, None), state_out
 
