@@ -116,15 +116,15 @@ def get_loaders(args):
     sample_weights = sample_weights / sample_weights.sum()
     
     # Create a weighted sampler based on the number of sequences, not the number of samples
-    weighted_sampler = WeightedRandomSampler(weights=sample_weights[:len(dataset)], num_samples=len(dataset), replacement=True)
-
-    train_loader = DataLoader(dataset, batch_size=args.batch_size, sampler=weighted_sampler, num_workers=args.num_workers, pin_memory=True)
+    # train_sampler = WeightedRandomSampler(weights=sample_weights[:len(dataset)], num_samples=len(dataset), replacement=True)
+    train_sampler = DistributedSampler(dataset, shuffle=True)
+    train_loader = DataLoader(dataset, batch_size=args.batch_size, sampler=train_sampler, num_workers=args.num_workers, pin_memory=True)
 
     # Use DistributedSampler for validation
-    val_sampler = DistributedSampler(dataset, num_replicas=args.world_size, rank=args.rank, shuffle=False)
+    val_sampler = DistributedSampler(dataset, shuffle=False)
     val_loader = DataLoader(dataset, batch_size=args.batch_size, sampler=val_sampler, num_workers=args.num_workers, pin_memory=True)
 
-    return train_loader, val_loader
+    return train_loader, val_loader, train_sampler, val_sampler
 
 def init_process(rank, size, fn, backend='gloo'):
     os.environ['MASTER_ADDR'] = '127.0.0.1'

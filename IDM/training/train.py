@@ -1,11 +1,13 @@
 import os
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   
+os.environ["CUDA_VISIBLE_DEVICES"]='0,1,2,4'
 import argparse
 import torch
 import torch.distributed as dist
 from datasets import get_loaders
 from model import Model
 import matplotlib.pyplot as plt
-
+from net_args import network_args
 
 def visualize_predictions(images, labels, predictions, epoch, local_rank):
     # 只在主进程中保存可视化结果
@@ -73,17 +75,23 @@ def evaluate(model, val_dataloader, val_sampler, rank, epoch):
 def main():
     parser = argparse.ArgumentParser(description="IDM training script")
     parser.add_argument("--local_rank", type=int)
-    parser.add_argument('--batch_size', type=int, default=128, help='input batch size for training')
+    parser.add_argument('--batch_size', type=int, default=4, help='input batch size for training')
     parser.add_argument('--epochs', type=int, default=20, help='number of epochs to train')
     parser.add_argument('--lr', type=float, default=0.003, help='learning rate')
+    parser.add_argument('--sequence_length', type=int, default=32, help='the sequence_length to be processed')
     parser.add_argument('--weight_decay', type=float, default=0.01, help='weight decay for optimizer')
+    parser.add_argument('--data_dir', type=str, default="/raid/car_racing/IDM/data", help='path to store data')
+    parser.add_argument('--num_workers', type=int, default=8, help='number of worker used in each thread to load data')
     parser.add_argument('--log_interval', type=int, default=10,
                         help='how many batches to wait before logging training status')
     parser.add_argument('--save_path', type=str, default='./best_model.pth', help='path to save the best model')
     args = parser.parse_args()
 
+
+    
+
     # 初始化分布式环境
-    dist.init_process_group(backend='nccl', init_method='env://')
+    dist.init_process_group(backend='nccl')
     # torch2.0 Use torch run:
     local_rank = int(os.environ["LOCAL_RANK"])
     # local_rank = args.local_rank
@@ -93,7 +101,8 @@ def main():
     train_dataloader, val_dataloader, train_sampler, val_sampler = get_loaders(args)
 
     # 初始化模型
-    model = Model(args).to(local_rank)
+    IDM_args = argparse.Namespace(**network_args)
+    model = Model(IDM_args).to(local_rank)
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank])
 
     # 设置优化器和损失函数
@@ -101,7 +110,7 @@ def main():
     # 每5个epoch将学习率减少为原来的0.1倍
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
     # loss
-    criterion = torch.nn.CrossEntropyLoss()
+    criterion = torch.nn.CrossEntropyLoss().to("cuda")
 
     best_accuracy = 0.0  # 保存最佳准确率
     best_epoch = -1
@@ -114,7 +123,7 @@ def main():
 
         # 在每个epoch开始时设置epoch; make shuffling work properly across multiple epochs;
         # Otherwise, the same ordering will always be used.
-        train_sampler.set_epoch(epoch)
+        # train_sampler.set_epoch(epoch)
 
         # 输出当前的学习率
         if local_rank == 0:
@@ -123,6 +132,7 @@ def main():
 
         for i, data in enumerate(train_dataloader):
             inputs, labels = data
+            labels = labels.type(torch.LongTensor) 
             inputs, labels = inputs.to(local_rank), labels.to(local_rank)
 
             optimizer.zero_grad()
