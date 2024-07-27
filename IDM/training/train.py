@@ -40,7 +40,7 @@ def evaluate(model, val_dataloader, val_sampler, rank, epoch):
         print(f'overall: {100 * (global_correct / global_total).mean().item()}')
         for i in range(key_num):
             accuracy_key = 100 * global_correct[i] / global_total[i]
-            print(f'    --key {i}: {accuracy_key.item():.2f}%')
+            print(f'    --key {i}: {accuracy_key.item():.4f}%')
 
     return (global_correct / global_total).mean().item()
 
@@ -118,6 +118,11 @@ def main():
 
     if local_rank == 0:
         writer = SummaryWriter('runs/exp')
+        argsDict = args.__dict__
+        with open('args.txt', 'w') as f:
+            f.writelines('------------------ start ------------------' + '\n')
+            for eachArg, value in argsDict.items():
+                f.writelines(eachArg + ' : ' + str(value) + '\n')
     # 训练循环
     for epoch in range(args.epochs):
         # 训练
@@ -139,12 +144,12 @@ def main():
             writer.add_scalar('train_loss', train_loss, epoch)
             writer.add_scalar('train_acc', train_acc, epoch)
             writer.add_scalar('val_acc', val_acc, epoch)
-    # 加载最佳模型权重进行评估
-    if local_rank == 0:
-        print(f"Loading best model from {best_model_path}")
-        model.load_state_dict(torch.load(best_model_path))
-        final_accuracy = evaluate(model, val_dataloader, val_sampler, local_rank, best_epoch)
-        print(f"Final accuracy with the best model: {final_accuracy:.2f}%")
+    # # 加载最佳模型权重进行评估
+    # if local_rank == 0:
+    #     print(f"Loading best model from {best_model_path}")
+    #     model.load_state_dict(torch.load(best_model_path))
+    #     final_accuracy = evaluate(model, val_dataloader, val_sampler, local_rank, best_epoch)
+    #     print(f"Final accuracy with the best model: {final_accuracy:.2f}%")
 
     dist.destroy_process_group()
 
