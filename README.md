@@ -2,4 +2,4 @@
 
 
 - [x] [IDM](https://github.com/chenmaol/car_racing/tree/main/IDM)
-- [ ] Foundation Model
+- [x] [Foundation Model](https://github.com/chenmaol/car_racing/tree/main/FM)

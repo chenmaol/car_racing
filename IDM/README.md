@@ -2,4 +2,4 @@
 
 - [x] [Record Raw Game Data](https://github.com/chenmaol/car_racing/tree/main/IDM/record)
 - [x] [Post Processing](https://github.com/chenmaol/car_racing/tree/main/IDM/post_processing)
-- [ ] [Training Script](https://github.com/chenmaol/car_racing/tree/main/IDM/training)
+- [x] [Training Script](https://github.com/chenmaol/car_racing/tree/main/IDM/training)
