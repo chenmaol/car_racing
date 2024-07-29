@@ -146,11 +146,11 @@ def get_loaders(args):
     # Create a weighted sampler based on the number of sequences, not the number of samples
     # train_sampler = WeightedRandomSampler(weights=sample_weights[:len(dataset)], num_samples=len(dataset), replacement=True)
     train_sampler = DistributedSampler(train_dataset, shuffle=True)
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, sampler=train_sampler, num_workers=args.num_workers, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, sampler=train_sampler, num_workers=args.num_workers, pin_memory=True, drop_last=True)
 
     # Use DistributedSampler for validation
     val_sampler = DistributedSampler(val_dataset, shuffle=False)
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, sampler=val_sampler, num_workers=args.num_workers, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, sampler=val_sampler, num_workers=args.num_workers, pin_memory=True, drop_last=True)
 
     return train_loader, val_loader, train_sampler, val_sampler
 
@@ -205,7 +205,13 @@ if __name__ == '__main__':
     df['frame_name'] = df['frame_name'].apply(lambda x: x.replace('\\', '/'))
     filter_idx = filter_csv(df, sequence_length, stride=4)
     train_idx, val_idx = train_test_split(filter_idx, test_size=0.2)
-    dataset = GameplayDataset(df, '../data', train_idx, sequence_length=sequence_length)
+    # dataset = GameplayDataset(df, '../data', train_idx, sequence_length=sequence_length)
+    train_transform = ConsistentTransform(transforms.Compose([
+        transforms.ColorJitter(hue=0.2, saturation=0.4, brightness=0.4, contrast=0.4),
+        transforms.RandomAffine(degrees=2, scale=(0.98, 1.02), shear=2, translate=(0.02, 0.02))
+    ]))
+    dataset = GameplayDataset(df, '../data', train_idx, transform=train_transform, sequence_length=sequence_length)
+
     dataloader = DataLoader(dataset, batch_size=8)
 
     for images, labels in dataloader:

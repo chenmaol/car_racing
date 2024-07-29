@@ -102,7 +102,7 @@ def main():
     train_dataloader, val_dataloader, train_sampler, val_sampler = get_loaders(args)
 
     # 初始化模型
-    model = Model(args.model_config).to("cuda").to(local_rank)
+    model = Model(args.model_config, args.batch_size).to("cuda").to(local_rank)
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], find_unused_parameters=True)
 
     # 设置优化器和损失函数
@@ -110,7 +110,7 @@ def main():
     # 每5个epoch将学习率减少为原来的0.1倍
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
     # loss
-    criterion = torch.nn.CrossEntropyLoss().to("cuda")
+    criterion = torch.nn.CrossEntropyLoss().to("cuda").to(local_rank)
 
     best_accuracy = 0.0  # 保存最佳准确率
     best_epoch = -1

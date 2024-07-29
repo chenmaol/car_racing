@@ -6,14 +6,14 @@ import yaml
 
 
 class Model(nn.Module):
-    def __init__(self, config_file):
+    def __init__(self, config_file, batch_size):
         super().__init__()
         with open(config_file) as file:
             configs = yaml.load(file.read(), Loader=yaml.FullLoader)
 
         self.net = InverseActionNet(**configs)
         self.head = nn.Linear(configs["hidsize"], configs["num_class"] * 2)
-        self.hidden_state = self.net.initial_state(1)
+        self.hidden_state = self.net.initial_state(batch_size)
         self.dummy_first = torch.zeros((configs["timesteps"], 1))
 
     def forward(self, x):
