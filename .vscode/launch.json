@@ -13,13 +13,13 @@
             "env": {
                     // "NCCL_P2P_DISABLE": "1",
                     // "NCCL_IB_DISABLE": "1",
-                    "CUDA_DEVICE_MAX_CONNECTIONS": "2",
-                    "CUDA_VISIBLE_DEVICES": "0,1"
+                    "CUDA_DEVICE_MAX_CONNECTIONS": "1",
+                    "CUDA_VISIBLE_DEVICES": "0"
                     },
             "args": [
                     "--standalone",
                     "--nnodes", "1",
-                    "--nproc_per_node", "2",
+                    "--nproc_per_node", "1",
                     "--node_rank", "0",
                     "IDM/training/train.py",
                     "--model_config", "IDM/training/model_config.yaml",
