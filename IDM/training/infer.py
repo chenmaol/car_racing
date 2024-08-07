@@ -30,7 +30,7 @@ def process_video(video_path, model, time_interval, sequence_length, output_dir,
     fps = cap.get(cv2.CAP_PROP_FPS)
 
     # sample frame by time_interval seconds
-    frame_interval = int(fps * time_interval)
+    frame_interval = round(fps * time_interval)
     print(fps, frame_interval)
     cnt = 0
     while cap.isOpened():
@@ -64,11 +64,11 @@ def process_video(video_path, model, time_interval, sequence_length, output_dir,
                 predicted_labels[i:i + sequence_length // 4, :] = predictions[:sequence_length // 4, :]
             predicted_labels[i + sequence_length // 4:i + sequence_length * 3 // 4, :] = predictions[sequence_length // 4:sequence_length * 3 // 4, :]
 
-        if len(frames_processed) % sequence_length != 0:
-            sequence = torch.stack(frames_processed[-sequence_length:], dim=0).permute(0, 2, 3, 1).unsqueeze(0).to(device)
-            probs = model(sequence).cpu().squeeze().numpy()  # [t, 4, 2]
-            predictions = np.argmax(probs, axis=-1)  # [t, 4]
-            predicted_labels[-3 * sequence_length // 4:, :] = predictions[-3 * sequence_length // 4:, :]
+        # if len(frames_processed) % sequence_length != 0:
+        sequence = torch.stack(frames_processed[-sequence_length:], dim=0).permute(0, 2, 3, 1).unsqueeze(0).to(device)
+        probs = model(sequence).cpu().squeeze().numpy()  # [t, 4, 2]
+        predictions = np.argmax(probs, axis=-1)  # [t, 4]
+        predicted_labels[-3 * sequence_length // 4:, :] = predictions[-3 * sequence_length // 4:, :]
 
     # 保存图像到本地路径
     image_paths = save_images_to_disk(frames, output_dir, video_id)
