@@ -11,8 +11,8 @@ import numpy as np
 import cv2
 from action import Action
 import torch
-from Model import model
-
+from model import Model
+from torchvision.transforms import transforms
 
 class Agent():
     """
@@ -23,17 +23,26 @@ class Agent():
     3. The next frame can be used as current frame in a loop
     """
 
-    def __init__(self, model, env):
-        self.model = model
-        self.model.eval()
+    def __init__(self, model_config_path, env):
+        # load model and env
         self.env = env
-        
+        self.model = Model(model_config_path, batch_size=1).to("cuda")
+        # self.model.load_state_dict(torch.load(model_path))
+        self.model.eval()
 
+        self.base_transform = transforms.Compose([
+                    transforms.Resize((self.env.img_size, self.env.img_size)),
+                    transforms.ToTensor(),
+                ])
+
+   
 
     def run_agent(self, cur_frame):
         while True:
             if not self.env.check_if_game_end(cur_frame):
                 with torch.no_grad():
+                    # transform raw cv2 images to torch tensor
+                    cur_frame = self.base_transform(cur_frame)
                     action = self.model(cur_frame)
                 cur_frame = self.env.step(action)
             else:
@@ -42,11 +51,8 @@ class Agent():
             
             if "Q" in self.key_check():
                 print("exiting")
-
-
-    def transform(self, cv2_imgs):
-        
-
+                break
+    
 
     @staticmethod
     def key_check():
@@ -58,10 +64,12 @@ class Agent():
         for key in keyList:
             # the ord() function returns an integer representing the Unicode character
             # chr() goes opposite way
-            if wapi.GetAsyncKeyState(ord(key)):
+            if win32api.GetAsyncKeyState(ord(key)):
                 keys.append(key)
-        # doesn't work to catch shift...
         return keys
+
+
+
 
 class OCRModule:
     """
