@@ -11,7 +11,6 @@ import numpy as np
 import cv2
 from action import Action
 import torch
-from  inference import infer
 from Model import model
 
 
@@ -30,6 +29,7 @@ class Agent():
         self.env = env
         
 
+
     def run_agent(self, cur_frame):
         while True:
             if not self.env.check_if_game_end(cur_frame):
@@ -42,6 +42,11 @@ class Agent():
             
             if "Q" in self.key_check():
                 print("exiting")
+
+
+    def transform(self, cv2_imgs):
+        
+
 
     @staticmethod
     def key_check():
