@@ -24,27 +24,39 @@ class Agent():
     3. The next frame can be used as current frame in a loop
     """
 
-    def __init__(self,
-                 model,
-                 env):
+    def __init__(self, model, env):
         self.model = model
         self.model.eval()
         self.env = env
+        
 
     def run_agent(self, cur_frame):
-        
         while True:
             if not self.env.check_if_game_end(cur_frame):
                 with torch.no_grad():
                     action = self.model(cur_frame)
                 cur_frame = self.env.step(action)
             else:
+                print("Game terminated!")
                 cur_frame = self.env.reset_game()
+            
+            if "Q" in self.key_check():
+                print("exiting")
 
-        print("Game terminated!")
-        
-        
-        
+    @staticmethod
+    def key_check():
+        keyList = ["\b"]
+        for char in "TFGHXCMQqpPYUN":
+            keyList.append(char)
+        keys = []
+
+        for key in keyList:
+            # the ord() function returns an integer representing the Unicode character
+            # chr() goes opposite way
+            if wapi.GetAsyncKeyState(ord(key)):
+                keys.append(key)
+        # doesn't work to catch shift...
+        return keys
 
 class OCRModule:
     """
