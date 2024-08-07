@@ -33,10 +33,13 @@ class Agent():
 
     def run_agent(self, cur_frame):
         
-        while True and not self.env.check_if_game_end(cur_frame):
-            with torch.no_grad():
-                action = self.model(cur_frame)
-            cur_frame = self.env.step(action)
+        while True:
+            if not self.env.check_if_game_end(cur_frame):
+                with torch.no_grad():
+                    action = self.model(cur_frame)
+                cur_frame = self.env.step(action)
+            else:
+                cur_frame = self.env.reset_game()
 
         print("Game terminated!")
         
