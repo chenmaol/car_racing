@@ -33,10 +33,13 @@ class Model(nn.Module):
             configs = yaml.load(file.read(), Loader=yaml.FullLoader)
 
         self.net = CNN_Transformer_3dconv(**configs)
+        self.pred_seq_len = configs['pred_seq_len']
         self.head = nn.Linear(configs["hidsize"], configs["num_class"] * 2)
 
+
+
     def forward(self, x):
-        pi_h = self.net(x)
+        pi_h = self.net(x)[:, -self.pred_seq_len:, :]
         out = self.head(pi_h)
         out = out.reshape(out.shape[0], out.shape[1], out.shape[2] // 2, 2)
         return out
@@ -44,6 +47,6 @@ class Model(nn.Module):
 
 if __name__ == '__main__':
     model = Model('model_config.yaml', 1).to('cuda')
-    x = torch.randn(1, 64, 128, 128, 3).to('cuda')
+    x = torch.randn(2, 32, 128, 128, 3).to('cuda')
     a = model(x)
     print(a.shape)
