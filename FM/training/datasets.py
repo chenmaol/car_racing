@@ -36,7 +36,7 @@ class GameplayDataset(Dataset):
         base_transform (torchvision.transforms.Compose): Transformations applied to each frame.
         augment_transform (ConsistentTransform): Augmentation transformations applied consistently to all frames in a sequence.
     """
-    def __init__(self, df, data_dir, sample_idx, img_size=128, sequence_length=10, keys=None, transform=None):
+    def __init__(self, df, data_dir, sample_idx, img_size=128, sequence_length=10, pred_length=4, gap_length=0, keys=None, transform=None):
         if keys is None:
             self.keys = ['w', 's', 'a', 'd']
         else:
@@ -45,6 +45,8 @@ class GameplayDataset(Dataset):
         self.data_dir = data_dir
         self.sample_idx = sample_idx
         self.sequence_length = sequence_length
+        self.pred_length = pred_length
+        self.gap_length = gap_length
 
         self.base_transform = transforms.Compose([
             transforms.Resize((img_size, img_size)),
@@ -57,6 +59,7 @@ class GameplayDataset(Dataset):
         df_index = self.sample_idx[index]
 
         rows = self.df.iloc[df_index:df_index+self.sequence_length]
+        pred_rows = self.df.iloc[df_index+self.sequence_length+self.gap_length:df_index+self.sequence_length+self.gap_length+self.pred_length]
         images = [Image.open(os.path.join(self.data_dir, img)).convert('RGB') for img in rows['frame_name']]
 
         images = [self.base_transform(image) for image in images]
@@ -65,7 +68,7 @@ class GameplayDataset(Dataset):
             images = self.augment_transform(images)
         images = torch.stack(images).permute(0, 2, 3, 1)  # [t, h, w, c]
 
-        labels = rows[self.keys].values.astype(np.float32)
+        labels = pred_rows[self.keys].values.astype(np.float32)
         labels = torch.tensor(np.array(labels), dtype=torch.float32)
 
         return images, labels
@@ -102,9 +105,9 @@ def get_sample_weights(df, class_column_names, class_weights):
     return sample_weights
 
 
-def filter_csv(df, seq_length, stride=1):
+def filter_csv(df, seq_length, target_length, gap_length, stride=1):
     for index, row in df.iterrows():
-        if index + seq_length < len(df) and index % stride == 0 and row['seq'] == df.loc[index + seq_length, 'seq']:
+        if index + seq_length + target_length + gap_length < len(df) and index % stride == 0 and row['seq'] == df.loc[index + seq_length + target_length + gap_length, 'seq']:
             df.loc[index, 'valid'] = True
         else:
             df.loc[index, 'valid'] = False
@@ -119,25 +122,52 @@ def get_loaders(args):
     csv_file = os.path.join(data_dir, args.label_file)
     img_size = args.img_size
     sequence_length = args.sequence_length
+    pred_seq_length = args.pred_seq_length
+    pred_gap_length = args.pred_gap_length
     data_stride = args.data_stride
 
     # filter valid index for training
     df = pd.read_csv(csv_file)
     df['frame_name'] = df['frame_name'].apply(lambda x: x.replace('\\', '/'))
-    filter_idx = filter_csv(df, sequence_length, stride=data_stride)
+    filter_idx = filter_csv(df, sequence_length, pred_seq_length, pred_gap_length, stride=data_stride)
     train_idx, val_idx = train_test_split(filter_idx, test_size=0.2)
-    print(f'train data samples:{len(train_idx)}')
-    print(f'val data samples:{len(val_idx)}')
+    if int(os.environ["LOCAL_RANK"]) == 0:
+        print(f'train data samples:{len(train_idx)}')
+        print(f'val data samples:{len(val_idx)}')
+        print(f"input shape:[{args.batch_size},{sequence_length},{img_size},{img_size},3]")
+        print(f"output shape:[{args.batch_size},{pred_seq_length},4,2]")
 
     train_transform = ConsistentTransform(transforms.Compose([
             transforms.ColorJitter(hue=0.2, saturation=0.4, brightness=0.4, contrast=0.4),
             transforms.RandomAffine(degrees=2, scale=(0.98, 1.02), shear=2, translate=(0.02, 0.02))
         ]))
 
-    train_dataset = GameplayDataset(df, data_dir, train_idx, transform=train_transform, img_size=img_size, sequence_length=args.sequence_length, keys=args.keys)
-    val_dataset = GameplayDataset(df, data_dir, val_idx, img_size=img_size, sequence_length=args.sequence_length, keys=args.keys)
+    train_dataset = GameplayDataset(df,
+                                    data_dir,
+                                    train_idx,
+                                    transform=train_transform,
+                                    img_size=img_size,
+                                    sequence_length=sequence_length,
+                                    pred_length=pred_seq_length,
+                                    gap_length=pred_gap_length,
+                                    keys=args.keys)
+    val_dataset = GameplayDataset(df,
+                                  data_dir,
+                                  val_idx,
+                                  img_size=img_size,
+                                  sequence_length=sequence_length,
+                                  pred_length=pred_seq_length,
+                                  gap_length=pred_gap_length,
+                                  keys=args.keys)
 
+    # class_column_names = args.keys
+    # class_weights = get_class_weights(dataset.df, class_column_names)
+    # sample_weights = get_sample_weights(dataset.df, class_column_names, class_weights)
+    #
+    # sample_weights = sample_weights / sample_weights.sum()
     
+    # Create a weighted sampler based on the number of sequences, not the number of samples
+    # train_sampler = WeightedRandomSampler(weights=sample_weights[:len(dataset)], num_samples=len(dataset), replacement=True)
     train_sampler = DistributedSampler(train_dataset, shuffle=True)
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, sampler=train_sampler, num_workers=args.num_workers, pin_memory=True, drop_last=True)
 
@@ -182,21 +212,38 @@ class Args:
 
 
 if __name__ == '__main__':
-    sequence_length = 64
+    # size = 2
+    # processes = []
+    # mp.set_start_method('spawn')  # Use 'spawn' method for multiprocessing
+    #
+    # for rank in range(size):
+    #     p = mp.Process(target=init_process, args=(rank, size, train))
+    #     p.start()
+    #     processes.append(p)
+    #
+    # for p in processes:
+    #     p.join()
+    sequence_length = 32
+    pred_length = 4
     df = pd.read_csv('../data/labels_interval-1_dirty-5.0.csv')
     df['frame_name'] = df['frame_name'].apply(lambda x: x.replace('\\', '/'))
-    filter_idx = filter_csv(df, sequence_length, stride=4)
+    filter_idx = filter_csv(df, sequence_length, pred_length, stride=pred_length)
     train_idx, val_idx = train_test_split(filter_idx, test_size=0.2)
     # dataset = GameplayDataset(df, '../data', train_idx, sequence_length=sequence_length)
     train_transform = ConsistentTransform(transforms.Compose([
         transforms.ColorJitter(hue=0.2, saturation=0.4, brightness=0.4, contrast=0.4),
         transforms.RandomAffine(degrees=2, scale=(0.98, 1.02), shear=2, translate=(0.02, 0.02))
     ]))
-    dataset = GameplayDataset(df, '../data', train_idx, transform=train_transform, sequence_length=sequence_length)
+    dataset = GameplayDataset(df,
+                              '../data',
+                              train_idx,
+                              transform=train_transform,
+                              sequence_length=sequence_length,
+                              pred_length=pred_length)
 
     dataloader = DataLoader(dataset, batch_size=8)
 
     for images, labels in dataloader:
+        print(images.shape)
+        print(labels.shape)
         a = 1
-
-

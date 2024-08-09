@@ -64,7 +64,6 @@ def train_one_epoch(model, train_dataloader, train_sampler, rank, epoch, optimiz
         inputs, labels = data
         labels = labels.type(torch.LongTensor)
         inputs, labels = inputs.to(rank), labels.to(rank)
-
         optimizer.zero_grad()
         outputs = model(inputs)  # [b, t, 4, 2]
         outputs = outputs.view(-1, outputs.shape[-1])  # [b, t, 4, 2] -> [b*t*4, 2]
@@ -77,7 +76,7 @@ def train_one_epoch(model, train_dataloader, train_sampler, rank, epoch, optimiz
         running_correct += (predicted == labels).sum().item()
         running_total += len(predicted)
 
-        running_loss += loss.item()
+        running_loss += loss.item() * len(predicted)
         if i % args.log_interval == 0 and rank == 0:
             print(f"[epoch: {epoch}, iteration: {i}] loss: {running_loss / running_total:.6f}, acc: {running_correct / running_total:.3f}")
 
@@ -144,25 +143,27 @@ def main():
             writer.add_scalar('train_loss', train_loss, epoch)
             writer.add_scalar('train_acc', train_acc, epoch)
             writer.add_scalar('val_acc', val_acc, epoch)
-    # 加载最佳模型权重进行评估
-    if local_rank == 0:
-        print(f"Loading best model from {best_model_path}")
-        model.load_state_dict(torch.load(best_model_path))
-        final_accuracy = evaluate(model, val_dataloader, val_sampler, local_rank, best_epoch)
-        print(f"Final accuracy with the best model: {final_accuracy:.2f}%")
+    # # 加载最佳模型权重进行评估
+    # if local_rank == 0:
+    #     print(f"Loading best model from {best_model_path}")
+    #     model.load_state_dict(torch.load(best_model_path))
+    #     final_accuracy = evaluate(model, val_dataloader, val_sampler, local_rank, best_epoch)
+    #     print(f"Final accuracy with the best model: {final_accuracy:.2f}%")
 
     dist.destroy_process_group()
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="IDM training script")
+    parser = argparse.ArgumentParser(description="FM training script")
     parser.add_argument("--local_rank", type=int)
     parser.add_argument('--batch_size', type=int, default=4, help='input batch size for training')
     parser.add_argument('--epochs', type=int, default=20, help='number of epochs to train')
     parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
     parser.add_argument('--sequence_length', type=int, default=64, help='the sequence_length to be processed')
+    parser.add_argument('--pred_seq_length', type=int, default=4, help='the sequence_length to be predict')
+    parser.add_argument('--pred_gap_length', type=int, default=0, help='the time gap between frame seq and predict seq')
     parser.add_argument('--weight_decay', type=float, default=0.001, help='weight decay for optimizer')
-    parser.add_argument('--data_dir', type=str, default="/raid/car_racing/IDM/data", help='path to store data')
+    parser.add_argument('--data_dir', type=str, default="/raid/car_racing/FM/data", help='path to store data')
     parser.add_argument('--label_file', type=str, default="labels_interval-1_dirty-5.0.csv", help='path to store data')
     parser.add_argument('--data_stride', type=int, default=4, help='data pick interval')
     parser.add_argument('--num_workers', type=int, default=8, help='number of worker used in each thread to load data')
