@@ -29,7 +29,6 @@ class Agent():
         self.model = Model(model_config_path, batch_size=1).to("cuda")
         # self.model.load_state_dict(torch.load(model_path))
         self.model.eval()
-
         self.base_transform = transforms.Compose([
                     transforms.Resize((self.env.img_size, self.env.img_size)),
                     transforms.ToTensor(),
