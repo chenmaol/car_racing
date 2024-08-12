@@ -1,5 +1,10 @@
 import time
+import ctypes
 import win32api
+import win32ui
+import win32gui
+import win32con
+import numpy as np
 import cv2
 from action import Action
 import torch
@@ -8,9 +13,7 @@ from torchvision.transforms import transforms
 from screen import MyScreen
 from collections import OrderedDict
 from PIL import Image
-import threading
-import numpy as np
-
+from tqdm import tqdm
 
 class Agent:
     """
@@ -26,8 +29,8 @@ class Agent:
         self.env = env
         self.model = Model(model_config_path, batch_size=1).to("cuda")
         self.gap_len = gap_len
-        self.time_interval = 0.1
         self.device = 'cuda'
+        self.time_interval = 0.1
         state_dict = torch.load(checkpoint_path)
         new_state_dict = OrderedDict()
         for k, v in state_dict.items():
@@ -46,56 +49,6 @@ class Agent:
 
         self.model.reset_queue()
 
-        # multi threading
-        self.condition = threading.Condition()
-        self.t1 = threading.Thread(target=self.get_image_and_infer)
-        self.t2 = threading.Thread(target=self.act)
-
-        self.test_var = 0
-        self.action = np.zeros((4, 4), dtype=np.uint8)
-
-    def start(self):
-        self.model.reset_queue()
-        self.action = np.zeros((4, 4), dtype=np.uint8)
-        self.t1.start()
-        self.t2.start()
-
-        self.t1.join()
-        self.t2.join()
-
-    def get_image_and_infer(self):
-        while True:
-            with self.condition:
-                t0 = time.time()
-                self.condition.wait()  # 等待线程act的通知
-                t1 = time.time()
-                img = self.env.get_frame()
-                t2 = time.time()
-                img = self.base_transform(img).unsqueeze(0).unsqueeze(0).to(self.device).permute(0, 1, 3, 4, 2)
-                self.model.extract_cnn_feature(img)
-                if len(self.model.queue_features) == 32:
-                    output = self.model.transformer_forward()
-                    self.action = torch.max(output, dim=-1)[1].cpu().squeeze().numpy()
-                t3 = time.time()
-            print(f'wait:{t1 - t0}, image:{t2 - t1}, infer:{t3 - t2}')
-            if "Q" in self.key_check():
-                print("image&infer thread exiting")
-                break
-
-    def act(self):
-        while True:
-            t0 = time.time()
-            with self.condition:
-                self.condition.notify()  # 通知线程image&infer
-                t1 = time.time()
-
-            self.env.step(self.action)
-            t2 = time.time()
-            print(f'notify time:{t1 - t0}, action time:{t2 - t1}, action var:{self.action[0]}')
-            if "Q" in self.key_check():
-                print("act thread exiting")
-                break
-
     def run_agent(self):
         while True:
             t0 = time.time()
@@ -108,7 +61,7 @@ class Agent:
                 output = self.model.transformer_forward()
                 action = torch.max(output, dim=-1)[1].cpu().squeeze().numpy()
                 t1 = time.time()
-                print(action[1], f'inference time:{t1 - t0}')
+                print(action[0], f'inference time:{t1 - t0}')
                 # do action
                 self.env.step(action)
                 t2 = time.time()
@@ -130,6 +83,57 @@ class Agent:
             if win32api.GetAsyncKeyState(ord(key)):
                 keys.append(key)
         return keys
+
+    def run_offline(self, video_path):
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            print(f"Error: Could not open video file:{video_path}")
+        frames = []
+        fps = cap.get(cv2.CAP_PROP_FPS)
+
+        # sample frame by time_interval seconds
+        frame_interval = round(fps * self.time_interval)
+        print(fps, frame_interval)
+        cnt = 0
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+            if cnt % frame_interval == 0:  # avoid store all image
+                frames.append(frame)
+            cnt += 1
+        cap.release()
+        frames_processed = []
+        print('loading images')
+        for frame in tqdm(frames, total=len(frames)):
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame = Image.fromarray(frame)
+            frame = self.base_transform(frame)
+            frames_processed.append(frame)
+
+        key_num = 4
+
+        predicted_labels = -np.ones((len(frames_processed), key_num), dtype=int)
+
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        sequence_length = self.model.max_queue_size
+        print('infer result')
+        with torch.no_grad():
+            for i in tqdm(range(0, len(frames_processed) - sequence_length, 4), total=(len(frames_processed) - sequence_length) // 4):
+                sequence = torch.stack(frames_processed[i:i + sequence_length], dim=0).permute(0, 2, 3, 1).unsqueeze(
+                    0).to(
+                    device)  # [1, t, h, w, c]
+                probs = self.model(sequence).cpu().squeeze().numpy()  # [t, 4, 2]
+                predictions = np.argmax(probs, axis=-1)  # [t, 4]
+                if i + sequence_length + 4 < len(predicted_labels):
+                    predicted_labels[i + sequence_length:i + sequence_length + 4, :] = predictions
+
+        # 保存图像到本地路径
+        for i in range(len(frames)):
+            cv2.imshow('pred', frames[i])
+            cv2.waitKey(0)
+            print(i, predicted_labels[i])
 
 class Env:
     """
@@ -165,12 +169,12 @@ class Env:
 
         # take action
         for i in range(4):
-            if action[1, i] == 1:
+            if action[0, i] == 1:
                 self.action.down_key(self.action_spaces[i])
         while time.time() < start_time + self.time_interval:
             pass
         for i in range(4):
-            if action[1, i] == 1:
+            if action[0, i] == 1:
                 self.action.up_key(self.action_spaces[i])
 
 
@@ -189,4 +193,5 @@ class Env:
 if __name__ == '__main__':
     wrcg_env = Env()
     agent = Agent(model_config_path='model_config.yaml', checkpoint_path='../weights/best_model_5.pth', gap_len=0, env=wrcg_env)
-    agent.start()
+    video_path = '../data/processed_youtube_videos/WRC Generations [Full Game ｜ No Commentary] PS4 [0Dpc16RrJA8].mp4_2.mp4_6.mp4'
+    agent.run_offline(video_path)
